@@ -9,23 +9,22 @@
  * @brief  Initialize the MPU6500, configure filters and ranges
  * @return 0 on success, 1 if Who-Am-I check fails
  */
-uint8_t MPU6500_Init() {
-    MPU6500_USR_CONFIG();
+uint8_t MPU6500_Init(MPU6500_handle *handle) {
 
-    if (MPU6500_ReadReg(MPU6500_WHO_AM_I) != 0x70) {
+    if (handle->mpu6500_read_reg(MPU6500_WHO_AM_I) != 0x70) {
         return 1;
     }
 
-    MPU6500_WriteReg(MPU6500_PWR_MGMT_1,       MPU6500_DEVICE_RESET);
-    MPU6500_DELAY_MS(100);
-    MPU6500_WriteReg(MPU6500_SIGNAL_PATH_RESET,
+    handle->mpu6500_write_reg(MPU6500_PWR_MGMT_1,       MPU6500_DEVICE_RESET);
+    handle->mpu6500_delay_ms(100);
+    handle->mpu6500_write_reg(MPU6500_SIGNAL_PATH_RESET,
                      MPU6500_GYRO_RST | MPU6500_ACCEL_RST | MPU6500_TEMP_RST);
-    MPU6500_DELAY_MS(100);
+    handle->mpu6500_delay_ms(100);
 
-    MPU6500_WriteReg(MPU6500_USER_CTRL,
+    handle->mpu6500_write_reg(MPU6500_USER_CTRL,
                      MPU6500_I2C_MST_EN | MPU6500_I2C_IF_DIS);
 
-    MPU6500_WriteReg(MPU6500_CONFIG, MPU6500_DLPF_CFG_5HZ);
+    handle->mpu6500_write_reg(MPU6500_CONFIG, MPU6500_DLPF_CFG_5HZ);
 
     uint8_t gyro_cfg;
     switch (GYRO_RANGE) {
@@ -44,7 +43,7 @@ uint8_t MPU6500_Init() {
         default:
             gyro_cfg = MPU6500_FS_SEL_250;
     }
-    MPU6500_WriteReg(MPU6500_GYRO_CONFIG, gyro_cfg);
+    handle->mpu6500_write_reg(MPU6500_GYRO_CONFIG, gyro_cfg);
 
     uint8_t accel_cfg;
     switch (ACCEL_RANGE) {
@@ -63,11 +62,12 @@ uint8_t MPU6500_Init() {
         default:
             accel_cfg = MPU6500_AFS_SEL_2G;
     }
-    MPU6500_WriteReg(MPU6500_ACCEL_CONFIG, accel_cfg);
-
-    MPU6500_WriteReg(MPU6500_ACCEL_CONFIG2, MPU6500_DLPF_CFG_5HZ);
-    MPU6500_WriteReg(MPU6500_SMPLRT_DIV, 19);
-    MPU6500_WriteReg(MPU6500_INT_ENABLE, MPU6500_DATA_RDY_EN);
+    handle->mpu6500_write_reg(MPU6500_ACCEL_CONFIG, accel_cfg);
+    uint8_t (*mpu6500_aux_iic_read_reg)(uint8_t addr, uint8_t reg);
+    void (*mpu6500_aux_iic_write_reg)(uint8_t addr, uint8_t reg, uint8_t data);
+    handle->mpu6500_write_reg(MPU6500_ACCEL_CONFIG2, MPU6500_DLPF_CFG_5HZ);
+    handle->mpu6500_write_reg(MPU6500_SMPLRT_DIV, 19);
+    handle->mpu6500_write_reg(MPU6500_INT_ENABLE, MPU6500_DATA_RDY_EN);
 
     return 0;
 }
@@ -76,11 +76,11 @@ uint8_t MPU6500_Init() {
  * @brief Read IMU data (accel, gyro, temperature) and populate a handle
  * @param handle Pointer to the handle to fill
  */
-void MPU6500_ReadData(Imu *imu, Temperature_Celsius *temp) {
-    imu->timestamp_ms = MPU6500_GetStamp_ms();
+void MPU6500_ReadData(MPU6500_handle *handle, Imu *imu, Temperature_Celsius *temp) {
+    imu->timestamp_ms = handle->mpu6500_get_stamp_ms();
 
     uint8_t buf[14];
-    MPU6500_ReadRegs(MPU6500_ACCEL_XOUT_H, buf, 14);
+    handle->mpu6500_read_regs(MPU6500_ACCEL_XOUT_H, buf, 14);
 
     imu->acceleration.x    = (int16_t)((buf[0] << 8) | buf[1]) * ACCEL_SCALE * ACCEL_G;
     imu->acceleration.y    = (int16_t)((buf[2] << 8) | buf[3]) * ACCEL_SCALE * ACCEL_G;
@@ -97,7 +97,7 @@ void MPU6500_ReadData(Imu *imu, Temperature_Celsius *temp) {
  * @param offset_y Y-axis offset (deg/s)
  * @param offset_z Z-axis offset (deg/s)
  */
-void MPU6500_Set_Gyro_Offset(float offset_x, float offset_y, float offset_z) {
+void MPU6500_Set_Gyro_Offset(MPU6500_handle *handle, float offset_x, float offset_y, float offset_z) {
     int16_t offset_x_raw = (int16_t)(offset_x * 32.8f);
     int16_t offset_y_raw = (int16_t)(offset_y * 32.8f);
     int16_t offset_z_raw = (int16_t)(offset_z * 32.8f);
@@ -106,12 +106,12 @@ void MPU6500_Set_Gyro_Offset(float offset_x, float offset_y, float offset_z) {
     uint16_t y_reg = (uint16_t)offset_y_raw;
     uint16_t z_reg = (uint16_t)offset_z_raw;
 
-    MPU6500_WriteReg(MPU6500_XG_OFFS_USRH, x_reg >> 8);
-    MPU6500_WriteReg(MPU6500_XG_OFFS_USRL, x_reg & 0xFF);
-    MPU6500_WriteReg(MPU6500_YG_OFFS_USRH, y_reg >> 8);
-    MPU6500_WriteReg(MPU6500_YG_OFFS_USRL, y_reg & 0xFF);
-    MPU6500_WriteReg(MPU6500_ZG_OFFS_USRH, z_reg >> 8);
-    MPU6500_WriteReg(MPU6500_ZG_OFFS_USRL, z_reg & 0xFF);
+    handle->mpu6500_write_reg(MPU6500_XG_OFFS_USRH, x_reg >> 8);
+    handle->mpu6500_write_reg(MPU6500_XG_OFFS_USRL, x_reg & 0xFF);
+    handle->mpu6500_write_reg(MPU6500_YG_OFFS_USRH, y_reg >> 8);
+    handle->mpu6500_write_reg(MPU6500_YG_OFFS_USRL, y_reg & 0xFF);
+    handle->mpu6500_write_reg(MPU6500_ZG_OFFS_USRH, z_reg >> 8);
+    handle->mpu6500_write_reg(MPU6500_ZG_OFFS_USRL, z_reg & 0xFF);
 }
 
 /**
@@ -120,13 +120,13 @@ void MPU6500_Set_Gyro_Offset(float offset_x, float offset_y, float offset_z) {
  * @param reg  Register to read from the external sensor
  * @return Register value, or 0 on failure
  */
-uint8_t MPU6500_AUXIIC_ReadReg(uint8_t addr, uint8_t reg) {
-    MPU6500_WriteReg(MPU6500_I2C_SLV0_ADDR, addr | MPU6500_SLV_RNW);
-    MPU6500_WriteReg(MPU6500_I2C_SLV0_REG, reg);
-    MPU6500_WriteReg(MPU6500_I2C_SLV0_CTRL, MPU6500_SLV_EN);
-    while (!(MPU6500_ReadReg(MPU6500_I2C_STATUS) & MPU6500_SLV_DONE)) {
+uint8_t MPU6500_AUXIIC_ReadReg(MPU6500_handle *handle, uint8_t addr, uint8_t reg) {
+    handle->mpu6500_write_reg(MPU6500_I2C_SLV0_ADDR, addr | MPU6500_SLV_RNW);
+    handle->mpu6500_write_reg(MPU6500_I2C_SLV0_REG, reg);
+    handle->mpu6500_write_reg(MPU6500_I2C_SLV0_CTRL, MPU6500_SLV_EN);
+    while (!(handle->mpu6500_read_reg(MPU6500_I2C_STATUS) & MPU6500_SLV_DONE)) {
     }
-    return MPU6500_ReadReg(MPU6500_I2C_SLV0_DI);
+    return handle->mpu6500_read_reg(MPU6500_I2C_SLV0_DI);
 }
 
 /**
@@ -135,11 +135,11 @@ uint8_t MPU6500_AUXIIC_ReadReg(uint8_t addr, uint8_t reg) {
  * @param reg  Register to write
  * @param data Value to write
  */
-void MPU6500_AUXIIC_WriteReg(uint8_t addr, uint8_t reg, uint8_t data) {
-    MPU6500_WriteReg(MPU6500_I2C_SLV0_ADDR, addr);
-    MPU6500_WriteReg(MPU6500_I2C_SLV0_REG, reg);
-    MPU6500_WriteReg(MPU6500_I2C_SLV0_DO, data);
-    MPU6500_WriteReg(MPU6500_I2C_SLV0_CTRL, MPU6500_SLV_EN);
-    while (!(MPU6500_ReadReg(MPU6500_I2C_STATUS) & MPU6500_SLV_DONE)) {
+void MPU6500_AUXIIC_WriteReg(MPU6500_handle *handle, uint8_t addr, uint8_t reg, uint8_t data) {
+    handle->mpu6500_write_reg(MPU6500_I2C_SLV0_ADDR, addr);
+    handle->mpu6500_write_reg(MPU6500_I2C_SLV0_REG, reg);
+    handle->mpu6500_write_reg(MPU6500_I2C_SLV0_DO, data);
+    handle->mpu6500_write_reg(MPU6500_I2C_SLV0_CTRL, MPU6500_SLV_EN);
+    while (!(handle->mpu6500_read_reg(MPU6500_I2C_STATUS) & MPU6500_SLV_DONE)) {
     }
 }

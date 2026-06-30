@@ -94,24 +94,15 @@
 /** @brief I2C_STATUS: slave transaction complete */
 #define MPU6500_SLV_DONE      0x40
 
-/* ======== User-overridable HAL stubs ( __weak ) ======== */
-
-/** @brief User-specific pin and peripheral configuration */
-__weak void MPU6500_USR_CONFIG(void);
-/** @brief Blocking delay in milliseconds */
-__weak void MPU6500_DELAY_MS(uint32_t ms);
-/** @brief Free-running millisecond counter */
-__weak uint32_t MPU6500_GetStamp_ms(void);
-/** @brief Power-on / enable the sensor */
-__weak void MPU6500_ENACT(void);
-/** @brief Power-off / disable the sensor */
-__weak void MPU6500_DEACT(void);
-/** @brief Read a single register byte over I2C/SPI */
-__weak uint8_t MPU6500_ReadReg(uint8_t reg);
-/** @brief Write a single register byte over I2C/SPI */
-__weak void MPU6500_WriteReg(uint8_t reg, uint8_t data);
-/** @brief Burst-read registers over I2C/SPI */
-__weak void MPU6500_ReadRegs(uint8_t start_reg, uint8_t *buffer, uint8_t length);
+typedef struct {
+    void (*mpu6500_delay_ms)(uint32_t ms);
+    uint32_t (*mpu6500_get_stamp_ms)(void);
+    void (*mpu6500_enact)(void);
+    void (*mpu6500_deact)(void);
+    uint8_t (*mpu6500_read_reg)(uint8_t reg);
+    void (*mpu6500_write_reg)(uint8_t reg, uint8_t data);
+    void (*mpu6500_read_regs)(uint8_t start_reg, uint8_t *buffer, uint8_t length);
+} MPU6500_handle;
 
 /* ======== Public API ======== */
 
@@ -119,13 +110,15 @@ __weak void MPU6500_ReadRegs(uint8_t start_reg, uint8_t *buffer, uint8_t length)
  * @brief  Initialize the MPU6500, configure filters and ranges
  * @return 0 on success, non-zero on failure (e.g. Who-Am-I mismatch)
  */
-uint8_t MPU6500_Init();
+uint8_t MPU6500_Init(MPU6500_handle *handle);
 
 /**
  * @brief Read IMU data (accel, gyro, temperature) and populate a handle
  * @param handle Pointer to the handle to fill
+ * @param imu Pointer to the Imu structure to populate
+ * @param temp Pointer to the Temperature_Celsius structure to populate
  */
-void MPU6500_ReadData(Imu *imu, Temperature_Celsius *temp);
+void MPU6500_ReadData(MPU6500_handle *handle, Imu *imu, Temperature_Celsius *temp);
 
 /**
  * @brief Set gyroscope offset calibration values
@@ -133,20 +126,8 @@ void MPU6500_ReadData(Imu *imu, Temperature_Celsius *temp);
  * @param offset_y Y-axis offset (deg/s)
  * @param offset_z Z-axis offset (deg/s)
  */
-void MPU6500_Set_Gyro_Offset(float offset_x, float offset_y, float offset_z);
+void MPU6500_Set_Gyro_Offset(MPU6500_handle *handle, float offset_x, float offset_y, float offset_z);
 
-/**
- * @brief Read from an external sensor via the MPU6500 AUX I2C bus
- * @param addr 7-bit I2C address of the external sensor
- * @param reg  Register to read from the external sensor
- * @return Register value, or 0 on failure
- */
-__weak uint8_t MPU6500_AUXIIC_ReadReg(uint8_t addr, uint8_t reg);
+uint8_t MPU6500_AUXIIC_ReadReg(MPU6500_handle *handle, uint8_t addr, uint8_t reg);
 
-/**
- * @brief Write to an external sensor via the MPU6500 AUX I2C bus
- * @param addr 7-bit I2C address of the external sensor
- * @param reg  Register to write
- * @param data Value to write
- */
-__weak void MPU6500_AUXIIC_WriteReg(uint8_t addr, uint8_t reg, uint8_t data);
+void MPU6500_AUXIIC_WriteReg(MPU6500_handle *handle, uint8_t addr, uint8_t reg, uint8_t data);
