@@ -94,7 +94,15 @@
 /** @brief I2C_STATUS: slave transaction complete */
 #define MPU6500_SLV_DONE      0x40
 
+typedef enum {
+    BUSY = 0,
+    IDLE = 1
+} MPU6500_DMA_state;
+
 typedef struct {
+    MPU6500_DMA_state dma_state;
+    uint8_t dma_tx_buffer[15];
+    uint8_t dma_rx_buffer[15];
     void (*mpu6500_delay_ms)(uint32_t ms);
     uint32_t (*mpu6500_get_stamp_ms)(void);
     void (*mpu6500_enact)(void);
@@ -102,6 +110,7 @@ typedef struct {
     uint8_t (*mpu6500_read_reg)(uint8_t reg);
     void (*mpu6500_write_reg)(uint8_t reg, uint8_t data);
     void (*mpu6500_read_regs)(uint8_t start_reg, uint8_t *buffer, uint8_t length);
+    void (*mpu6500_read_regs_dma)(uint8_t start_reg,uint8_t *tx_buffer, uint8_t *rx_buffer, uint8_t length);
 } MPU6500_handle;
 
 /* ======== Public API ======== */
@@ -119,6 +128,10 @@ uint8_t MPU6500_Init(MPU6500_handle *handle);
  * @param temp Pointer to the Temperature_Celsius structure to populate
  */
 void MPU6500_ReadData(MPU6500_handle *handle, Imu *imu, Temperature_Celsius *temp);
+
+void MPU6500_ReadData_DMA(MPU6500_handle *handle, Imu *imu, Temperature_Celsius *temp);
+
+void MPU6500_On_ReadData_DMA_Cplt(MPU6500_handle *handle, Imu *imu, Temperature_Celsius *temp);
 
 /**
  * @brief Set gyroscope offset calibration values

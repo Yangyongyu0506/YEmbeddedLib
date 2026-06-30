@@ -89,6 +89,36 @@ void MPU6500_ReadData(MPU6500_handle *handle, Imu *imu, Temperature_Celsius *tem
     imu->angular_velocity.z     = (int16_t)((buf[12] << 8) | buf[13]) * GYRO_SCALE;
 }
 
+void MPU6500_ReadData_DMA(MPU6500_handle *handle, Imu *imu, Temperature_Celsius *temp) {
+    if (handle->dma_state == BUSY) {
+        // DMA transfer is already in progress, return early
+        return;
+    }
+    imu->timestamp_ms = handle->mpu6500_get_stamp_ms();
+    temp->timestamp_ms = imu->timestamp_ms;
+
+    handle->mpu6500_read_regs_dma(MPU6500_ACCEL_XOUT_H, handle->dma_tx_buffer, handle->dma_rx_buffer, 14);
+    handle->dma_state = BUSY;
+}
+
+void MPU6500_On_ReadData_DMA_Cplt(MPU6500_handle *handle, Imu *imu, Temperature_Celsius *temp) {
+    if (handle->dma_state != BUSY) {
+        // DMA transfer is not in progress, return early
+        return;
+    }
+    handle->mpu6500_deact();
+
+    imu->acceleration.x    = (int16_t)((handle->dma_rx_buffer[1] << 8) | handle->dma_rx_buffer[2]) * ACCEL_SCALE * ACCEL_G;
+    imu->acceleration.y    = (int16_t)((handle->dma_rx_buffer[3] << 8) | handle->dma_rx_buffer[4]) * ACCEL_SCALE * ACCEL_G;
+    imu->acceleration.z    = (int16_t)((handle->dma_rx_buffer[5] << 8) | handle->dma_rx_buffer[6]) * ACCEL_SCALE * ACCEL_G;
+    temp->data = ((int16_t)((handle->dma_rx_buffer[7] << 8) | handle->dma_rx_buffer[8]) / 333.87f) + 21.0f;
+    imu->angular_velocity.x     = (int16_t)((handle->dma_rx_buffer[9]  << 8) | handle->dma_rx_buffer[10])  * GYRO_SCALE;
+    imu->angular_velocity.y     = (int16_t)((handle->dma_rx_buffer[11] << 8) | handle->dma_rx_buffer[12]) * GYRO_SCALE;
+    imu->angular_velocity.z     = (int16_t)((handle->dma_rx_buffer[13] << 8) | handle->dma_rx_buffer[14]) * GYRO_SCALE;
+
+    handle->dma_state = IDLE; // Reset the state to IDLE after processing
+}
+
 /**
  * @brief Set gyroscope offset calibration values
  * @param offset_x X-axis offset (deg/s)
