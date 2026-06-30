@@ -50,20 +50,15 @@
 
 /* ======== User-overridable HAL stubs ( __weak ) ======== */
 
-/** @brief User-specific pin and peripheral configuration */
-__weak void IST8310_USR_CONFIG(void);
-/** @brief Blocking delay in milliseconds */
-__weak void IST8310_DELAY_MS(uint32_t ms);
-/** @brief Free-running millisecond counter */
-__weak uint32_t IST8310_GetStamp_ms(void);
-/** @brief Hardware reset of the sensor */
-__weak void IST8310_RESET(void);
-/** @brief Read a single register byte over I2C/SPI */
-__weak uint8_t IST8310_ReadReg(uint8_t reg);
-/** @brief Write a single register byte over I2C/SPI */
-__weak void IST8310_WriteReg(uint8_t reg, uint8_t data);
-/** @brief Burst-read registers over I2C/SPI */
-__weak void IST8310_ReadRegs(uint8_t start_reg, uint8_t *buffer, uint8_t length);
+typedef struct {
+    void (*ist8310_usr_cfg)(void);
+    void (*ist8310_delay_ms)(uint32_t ms);
+    uint32_t (*ist8310_get_stamp_ms)(void);
+    void (*ist8310_reset)(void);
+    uint8_t (*ist8310_read_reg)(uint8_t reg);
+    void (*ist8310_write_reg)(uint8_t reg, uint8_t data);
+    void (*ist8310_read_regs)(uint8_t start_reg, uint8_t *buffer, uint8_t length);
+} IST8310_handle;
 
 /* ======== Public API ======== */
 
@@ -71,10 +66,10 @@ __weak void IST8310_ReadRegs(uint8_t start_reg, uint8_t *buffer, uint8_t length)
  * @brief  Initialize the IST8310 sensor
  * @return 0 on success, non-zero on failure (e.g. Who-Am-I mismatch)
  */
-uint8_t IST8310_Init();
+uint8_t IST8310_Init(IST8310_handle *handle);
 
 /**
  * @brief Read magnetometer data and populate a handle
  * @param handle Pointer to the handle to fill
  */
-void IST8310_ReadData(MagneticField *mag);
+void IST8310_ReadData(IST8310_handle *handle, MagneticField *mag);

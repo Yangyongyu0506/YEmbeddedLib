@@ -63,8 +63,6 @@ uint8_t MPU6500_Init(MPU6500_handle *handle) {
             accel_cfg = MPU6500_AFS_SEL_2G;
     }
     handle->mpu6500_write_reg(MPU6500_ACCEL_CONFIG, accel_cfg);
-    uint8_t (*mpu6500_aux_iic_read_reg)(uint8_t addr, uint8_t reg);
-    void (*mpu6500_aux_iic_write_reg)(uint8_t addr, uint8_t reg, uint8_t data);
     handle->mpu6500_write_reg(MPU6500_ACCEL_CONFIG2, MPU6500_DLPF_CFG_5HZ);
     handle->mpu6500_write_reg(MPU6500_SMPLRT_DIV, 19);
     handle->mpu6500_write_reg(MPU6500_INT_ENABLE, MPU6500_DATA_RDY_EN);
