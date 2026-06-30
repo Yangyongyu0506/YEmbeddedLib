@@ -76,39 +76,19 @@ uint8_t MPU6500_Init() {
  * @brief Read IMU data (accel, gyro, temperature) and populate a handle
  * @param handle Pointer to the handle to fill
  */
-void MPU6500_ReadData(MPU6500_handle *handle) {
-    handle->timestamp_ms = MPU6500_GetStamp_ms();
+void MPU6500_ReadData(Imu *imu, Temperature_Celsius *temp) {
+    imu->timestamp_ms = MPU6500_GetStamp_ms();
 
     uint8_t buf[14];
     MPU6500_ReadRegs(MPU6500_ACCEL_XOUT_H, buf, 14);
 
-    handle->accel_x    = (int16_t)((buf[0] << 8) | buf[1]) * ACCEL_SCALE * ACCEL_G;
-    handle->accel_y    = (int16_t)((buf[2] << 8) | buf[3]) * ACCEL_SCALE * ACCEL_G;
-    handle->accel_z    = (int16_t)((buf[4] << 8) | buf[5]) * ACCEL_SCALE * ACCEL_G;
-    handle->temperature = ((int16_t)((buf[6] << 8) | buf[7]) / 333.87f) + 21.0f;
-    handle->gyro_x     = (int16_t)((buf[8]  << 8) | buf[9])  * GYRO_SCALE;
-    handle->gyro_y     = (int16_t)((buf[10] << 8) | buf[11]) * GYRO_SCALE;
-    handle->gyro_z     = (int16_t)((buf[12] << 8) | buf[13]) * GYRO_SCALE;
-}
-
-/**
- * @brief Pretty-print a handle over stdio
- * @param handle Pointer to the handle to print
- */
-void MPU6500_Print(MPU6500_handle *handle) {
-    printf("======\r\n");
-    printf("stamp=%d\r\n", handle->timestamp_ms);
-    printf("a=[%d, %d, %d]\r\n",
-           (int)(100 * handle->accel_x), (int)(100 * handle->accel_y), (int)(100 * handle->accel_z));
-    printf("|a|=%d\r\n", (int)(sqrt(handle->accel_x * handle->accel_x +
-                                   handle->accel_y * handle->accel_y +
-                                   handle->accel_z * handle->accel_z)));
-    printf("g=[%d, %d, %d]\r\n",
-           (int)(100 * handle->gyro_x), (int)(100 * handle->gyro_y), (int)(100 * handle->gyro_z));
-    printf("|g|=%d\r\n", (int)(sqrt(handle->gyro_x * handle->gyro_x +
-                                   handle->gyro_y * handle->gyro_y +
-                                   handle->gyro_z * handle->gyro_z)));
-    printf("temp=%d\r\n", (int)(100 * handle->temperature));
+    imu->acceleration.x    = (int16_t)((buf[0] << 8) | buf[1]) * ACCEL_SCALE * ACCEL_G;
+    imu->acceleration.y    = (int16_t)((buf[2] << 8) | buf[3]) * ACCEL_SCALE * ACCEL_G;
+    imu->acceleration.z    = (int16_t)((buf[4] << 8) | buf[5]) * ACCEL_SCALE * ACCEL_G;
+    temp->data = ((int16_t)((buf[6] << 8) | buf[7]) / 333.87f) + 21.0f;
+    imu->angular_velocity.x     = (int16_t)((buf[8]  << 8) | buf[9])  * GYRO_SCALE;
+    imu->angular_velocity.y     = (int16_t)((buf[10] << 8) | buf[11]) * GYRO_SCALE;
+    imu->angular_velocity.z     = (int16_t)((buf[12] << 8) | buf[13]) * GYRO_SCALE;
 }
 
 /**

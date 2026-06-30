@@ -16,6 +16,8 @@
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
+#include "imu.h"
+#include "temp.h"
 
 /** @brief Accelerometer scale factor, g per LSB */
 #define ACCEL_SCALE (2 * ACCEL_RANGE / 65536.0f)
@@ -67,6 +69,7 @@
 /** @brief CONFIG / ACCEL_CONFIG2: DLPF bandwidth ~5 Hz */
 #define MPU6500_DLPF_CFG_5HZ  0x06
 /** @brief GYRO_CONFIG: ±250 dps */
+
 #define MPU6500_FS_SEL_250    0x00
 /** @brief GYRO_CONFIG: ±500 dps */
 #define MPU6500_FS_SEL_500    0x08
@@ -90,23 +93,6 @@
 #define MPU6500_SLV_EN        0x80
 /** @brief I2C_STATUS: slave transaction complete */
 #define MPU6500_SLV_DONE      0x40
-
-/**
- * @brief MPU6500 data handle
- *
- * Contains calibrated acceleration (m/s^2), angular velocity (deg/s), and
- * temperature (°C) readings with an acquisition timestamp.
- */
-typedef struct {
-    uint32_t timestamp_ms; /**< Timestamp (ms) when the sample was acquired */
-    float accel_x;         /**< Acceleration along X-axis (m/s^2) */
-    float accel_y;         /**< Acceleration along Y-axis (m/s^2) */
-    float accel_z;         /**< Acceleration along Z-axis (m/s^2) */
-    float gyro_x;          /**< Angular velocity around X-axis (deg/s) */
-    float gyro_y;          /**< Angular velocity around Y-axis (deg/s) */
-    float gyro_z;          /**< Angular velocity around Z-axis (deg/s) */
-    float temperature;     /**< Die temperature (°C) */
-} MPU6500_handle;
 
 /* ======== User-overridable HAL stubs ( __weak ) ======== */
 
@@ -139,13 +125,7 @@ uint8_t MPU6500_Init();
  * @brief Read IMU data (accel, gyro, temperature) and populate a handle
  * @param handle Pointer to the handle to fill
  */
-void MPU6500_ReadData(MPU6500_handle *handle);
-
-/**
- * @brief Pretty-print a handle over stdio
- * @param handle Pointer to the handle to print
- */
-void MPU6500_Print(MPU6500_handle *handle);
+void MPU6500_ReadData(Imu *imu, Temperature_Celsius *temp);
 
 /**
  * @brief Set gyroscope offset calibration values

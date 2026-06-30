@@ -12,6 +12,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <math.h>
+#include "mag.h"
 
 /** @brief Magnetic field scale factor, uT per LSB */
 #define IST8310_SCALE 0.3f
@@ -47,19 +48,6 @@
 /** @brief CNTL2: continuous measurement mode @ 200 Hz */
 #define IST8310_CNTL2_CONT_200HZ 0x03
 
-/**
- * @brief IST8310 data handle
- *
- * Contains calibrated magnetic field readings (uT) with an acquisition
- * timestamp.
- */
-typedef struct {
-    uint32_t timestamp_ms; /**< Timestamp (ms) when the sample was acquired */
-    float mag_x;           /**< Magnetic field along X-axis (uT) */
-    float mag_y;           /**< Magnetic field along Y-axis (uT) */
-    float mag_z;           /**< Magnetic field along Z-axis (uT) */
-} IST8310_handle;
-
 /* ======== User-overridable HAL stubs ( __weak ) ======== */
 
 /** @brief User-specific pin and peripheral configuration */
@@ -89,10 +77,4 @@ uint8_t IST8310_Init();
  * @brief Read magnetometer data and populate a handle
  * @param handle Pointer to the handle to fill
  */
-void IST8310_ReadData(IST8310_handle *handle);
-
-/**
- * @brief Pretty-print a handle over stdio
- * @param handle Pointer to the handle to print
- */
-void IST8310_Print(IST8310_handle *handle);
+void IST8310_ReadData(MagneticField *mag);
