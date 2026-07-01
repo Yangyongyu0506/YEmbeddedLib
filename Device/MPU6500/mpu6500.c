@@ -149,12 +149,12 @@ void MPU6500_Set_Gyro_Offset(MPU6500_handle *handle, float offset_x, float offse
  * @return Register value, or 0 on failure
  */
 uint8_t MPU6500_AUXIIC_ReadReg(MPU6500_handle *handle, uint8_t addr, uint8_t reg) {
-    handle->mpu6500_write_reg(MPU6500_I2C_SLV0_ADDR, addr | MPU6500_SLV_RNW);
-    handle->mpu6500_write_reg(MPU6500_I2C_SLV0_REG, reg);
-    handle->mpu6500_write_reg(MPU6500_I2C_SLV0_CTRL, MPU6500_SLV_EN);
+    handle->mpu6500_write_reg(MPU6500_I2C_SLV4_ADDR, addr | MPU6500_SLV_RNW);
+    handle->mpu6500_write_reg(MPU6500_I2C_SLV4_REG, reg);
+    handle->mpu6500_write_reg(MPU6500_I2C_SLV4_CTRL, MPU6500_SLV_EN);
     while (!(handle->mpu6500_read_reg(MPU6500_I2C_STATUS) & MPU6500_SLV_DONE)) {
     }
-    return handle->mpu6500_read_reg(MPU6500_I2C_SLV0_DI);
+    return handle->mpu6500_read_reg(MPU6500_I2C_SLV4_DI);
 }
 
 /**
@@ -164,10 +164,10 @@ uint8_t MPU6500_AUXIIC_ReadReg(MPU6500_handle *handle, uint8_t addr, uint8_t reg
  * @param data Value to write
  */
 void MPU6500_AUXIIC_WriteReg(MPU6500_handle *handle, uint8_t addr, uint8_t reg, uint8_t data) {
-    handle->mpu6500_write_reg(MPU6500_I2C_SLV0_ADDR, addr);
-    handle->mpu6500_write_reg(MPU6500_I2C_SLV0_REG, reg);
-    handle->mpu6500_write_reg(MPU6500_I2C_SLV0_DO, data);
-    handle->mpu6500_write_reg(MPU6500_I2C_SLV0_CTRL, MPU6500_SLV_EN);
+    handle->mpu6500_write_reg(MPU6500_I2C_SLV4_ADDR, addr);
+    handle->mpu6500_write_reg(MPU6500_I2C_SLV4_REG, reg);
+    handle->mpu6500_write_reg(MPU6500_I2C_SLV4_DO, data);
+    handle->mpu6500_write_reg(MPU6500_I2C_SLV4_CTRL, MPU6500_SLV_EN);
     while (!(handle->mpu6500_read_reg(MPU6500_I2C_STATUS) & MPU6500_SLV_DONE)) {
     }
 }

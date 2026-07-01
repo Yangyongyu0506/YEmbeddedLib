@@ -39,11 +39,11 @@
 #define MPU6500_GYRO_CONFIG       0x1B /**< Gyro full-scale select */
 #define MPU6500_ACCEL_CONFIG      0x1C /**< Accel full-scale select */
 #define MPU6500_ACCEL_CONFIG2     0x1D /**< Accel DLPF config */
-#define MPU6500_I2C_SLV0_ADDR     0x31 /**< AUX I2C slave 0 address */
-#define MPU6500_I2C_SLV0_REG      0x32 /**< AUX I2C slave 0 register */
-#define MPU6500_I2C_SLV0_DO       0x33 /**< AUX I2C slave 0 data output */
-#define MPU6500_I2C_SLV0_CTRL     0x34 /**< AUX I2C slave 0 control */
-#define MPU6500_I2C_SLV0_DI       0x35 /**< AUX I2C slave 0 data input */
+#define MPU6500_I2C_SLV4_ADDR     0x31 /**< AUX I2C slave 4 address */
+#define MPU6500_I2C_SLV4_REG      0x32 /**< AUX I2C slave 4 register */
+#define MPU6500_I2C_SLV4_DO       0x33 /**< AUX I2C slave 4 data output */
+#define MPU6500_I2C_SLV4_CTRL     0x34 /**< AUX I2C slave 4 control */
+#define MPU6500_I2C_SLV4_DI       0x35 /**< AUX I2C slave 4 data input */
 #define MPU6500_I2C_STATUS        0x36 /**< AUX I2C status */
 #define MPU6500_INT_ENABLE        0x38 /**< Interrupt enable */
 #define MPU6500_ACCEL_XOUT_H      0x3B /**< Accel X output, high byte */
