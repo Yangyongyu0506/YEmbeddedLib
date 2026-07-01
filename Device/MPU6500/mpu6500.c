@@ -90,7 +90,7 @@ void MPU6500_ReadData(MPU6500_handle *handle, Imu *imu, Temperature_Celsius *tem
 }
 
 void MPU6500_ReadData_DMA(MPU6500_handle *handle, Imu *imu, Temperature_Celsius *temp) {
-    if (handle->dma_state == BUSY) {
+    if (handle->dma_state == MPU6500_BUSY) {
         // DMA transfer is already in progress, return early
         return;
     }
@@ -98,11 +98,11 @@ void MPU6500_ReadData_DMA(MPU6500_handle *handle, Imu *imu, Temperature_Celsius 
     temp->timestamp_ms = imu->timestamp_ms;
 
     handle->mpu6500_read_regs_dma(MPU6500_ACCEL_XOUT_H, handle->dma_tx_buffer, handle->dma_rx_buffer, 14);
-    handle->dma_state = BUSY;
+    handle->dma_state = MPU6500_BUSY;
 }
 
 void MPU6500_On_ReadData_DMA_Cplt(MPU6500_handle *handle, Imu *imu, Temperature_Celsius *temp) {
-    if (handle->dma_state != BUSY) {
+    if (handle->dma_state != MPU6500_BUSY) {
         // DMA transfer is not in progress, return early
         return;
     }
@@ -116,7 +116,7 @@ void MPU6500_On_ReadData_DMA_Cplt(MPU6500_handle *handle, Imu *imu, Temperature_
     imu->angular_velocity.y     = (int16_t)((handle->dma_rx_buffer[11] << 8) | handle->dma_rx_buffer[12]) * GYRO_SCALE;
     imu->angular_velocity.z     = (int16_t)((handle->dma_rx_buffer[13] << 8) | handle->dma_rx_buffer[14]) * GYRO_SCALE;
 
-    handle->dma_state = IDLE; // Reset the state to IDLE after processing
+    handle->dma_state = MPU6500_IDLE; // Reset the state to IDLE after processing
 }
 
 /**

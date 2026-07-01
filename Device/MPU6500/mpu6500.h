@@ -95,8 +95,8 @@
 #define MPU6500_SLV_DONE      0x40
 
 typedef enum {
-    BUSY = 0,
-    IDLE = 1
+    MPU6500_BUSY = 0,
+    MPU6500_IDLE = 1
 } MPU6500_DMA_state;
 
 typedef struct {

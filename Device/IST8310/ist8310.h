@@ -50,7 +50,15 @@
 
 /* ======== User-overridable HAL stubs ( __weak ) ======== */
 
+typedef enum {
+    IST8310_BUSY = 0,
+    IST8310_IDLE = 1
+} IST8310_DMA_state;
+
 typedef struct {
+    IST8310_DMA_state dma_state;
+    uint8_t dma_tx_buffer[7];
+    uint8_t dma_rx_buffer[7];
     void (*ist8310_usr_cfg)(void);
     void (*ist8310_delay_ms)(uint32_t ms);
     uint32_t (*ist8310_get_stamp_ms)(void);
@@ -58,6 +66,7 @@ typedef struct {
     uint8_t (*ist8310_read_reg)(uint8_t reg);
     void (*ist8310_write_reg)(uint8_t reg, uint8_t data);
     void (*ist8310_read_regs)(uint8_t start_reg, uint8_t *buffer, uint8_t length);
+    void (*ist8310_readregs_dma)(uint8_t start_reg, uint8_t *tx_buffer, uint8_t *rx_buffer, uint8_t length);
 } IST8310_handle;
 
 /* ======== Public API ======== */
@@ -73,3 +82,7 @@ uint8_t IST8310_Init(IST8310_handle *handle);
  * @param handle Pointer to the handle to fill
  */
 void IST8310_ReadData(IST8310_handle *handle, MagneticField *mag);
+
+void IST8310_ReadData_DMA(IST8310_handle *handle, MagneticField *mag);
+
+void IST8310_On_ReadData_DMA_Cplt(IST8310_handle *handle, MagneticField *mag);
