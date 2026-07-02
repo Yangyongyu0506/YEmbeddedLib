@@ -52,10 +52,10 @@ void IST8310_ReadData_DMA(IST8310_handle *handle, MagneticField *mag) {
     if (handle->dma_state == IST8310_BUSY) {
         return;
     }
+    handle->dma_state = IST8310_BUSY;
     mag->timestamp_ms = handle->ist8310_get_stamp_ms();
 
     handle->ist8310_read_regs_dma(IST8310_DATA_XL, handle->dma_tx_buffer, handle->dma_rx_buffer, 6);
-    handle->dma_state = IST8310_BUSY;
 }
 
 /**
@@ -72,9 +72,8 @@ void IST8310_On_ReadData_DMA_Cplt(IST8310_handle *handle, MagneticField *mag) {
     if (handle->dma_state != IST8310_BUSY) {
         return;
     }
-
+    handle->dma_state = IST8310_IDLE;
     mag->data.x = ((int16_t)(handle->dma_rx_buffer[2] << 8 | handle->dma_rx_buffer[1])) * IST8310_SCALE;
     mag->data.y = ((int16_t)(handle->dma_rx_buffer[4] << 8 | handle->dma_rx_buffer[3])) * IST8310_SCALE;
     mag->data.z = ((int16_t)(handle->dma_rx_buffer[6] << 8 | handle->dma_rx_buffer[5])) * IST8310_SCALE;
-    handle->dma_state = IST8310_IDLE;
 }

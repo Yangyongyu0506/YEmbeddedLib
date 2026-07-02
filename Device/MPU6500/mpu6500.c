@@ -67,7 +67,7 @@ uint8_t MPU6500_Init(MPU6500_handle *handle) {
     }
     handle->mpu6500_write_reg(MPU6500_ACCEL_CONFIG, accel_cfg);
     handle->mpu6500_write_reg(MPU6500_ACCEL_CONFIG2, MPU6500_DLPF_CFG_5HZ);
-    handle->mpu6500_write_reg(MPU6500_SMPLRT_DIV, 19);
+    handle->mpu6500_write_reg(MPU6500_SMPLRT_DIV, 0x13); // Sample rate = Gyro output rate / (1 + SMPLRT_DIV) = 1 kHz / (1 + 19) = 50 Hz
     handle->mpu6500_write_reg(MPU6500_INT_ENABLE, MPU6500_DATA_RDY_EN);
 
     return 0;
@@ -109,11 +109,12 @@ void MPU6500_ReadData_DMA(MPU6500_handle *handle, Imu *imu, Temperature_Celsius 
     if (handle->dma_state == MPU6500_BUSY) {
         return;
     }
+    handle->dma_state = MPU6500_BUSY;
+
     imu->timestamp_ms = handle->mpu6500_get_stamp_ms();
     temp->timestamp_ms = imu->timestamp_ms;
 
     handle->mpu6500_read_regs_dma(MPU6500_ACCEL_XOUT_H, handle->dma_tx_buffer, handle->dma_rx_buffer, 14);
-    handle->dma_state = MPU6500_BUSY;
 }
 
 /**
@@ -132,6 +133,7 @@ void MPU6500_On_ReadData_DMA_Cplt(MPU6500_handle *handle, Imu *imu, Temperature_
         return;
     }
     handle->mpu6500_deact();
+    handle->dma_state = MPU6500_IDLE; // Reset the state to IDLE after processing
 
     imu->acceleration.x    = (int16_t)((handle->dma_rx_buffer[1] << 8) | handle->dma_rx_buffer[2]) * ACCEL_SCALE * ACCEL_G;
     imu->acceleration.y    = (int16_t)((handle->dma_rx_buffer[3] << 8) | handle->dma_rx_buffer[4]) * ACCEL_SCALE * ACCEL_G;
@@ -141,7 +143,6 @@ void MPU6500_On_ReadData_DMA_Cplt(MPU6500_handle *handle, Imu *imu, Temperature_
     imu->angular_velocity.y     = (int16_t)((handle->dma_rx_buffer[11] << 8) | handle->dma_rx_buffer[12]) * GYRO_SCALE;
     imu->angular_velocity.z     = (int16_t)((handle->dma_rx_buffer[13] << 8) | handle->dma_rx_buffer[14]) * GYRO_SCALE;
 
-    handle->dma_state = MPU6500_IDLE; // Reset the state to IDLE after processing
 }
 
 /**
