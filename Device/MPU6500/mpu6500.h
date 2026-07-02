@@ -2,8 +2,10 @@
  * @file mpu6500.h
  * @brief InvenSense MPU-6500 6-axis IMU (gyro + accelerometer) driver
  *
- * This driver uses a weak-linking HAL pattern: platform-level functions are
- * declared __weak and must be overridden by the user for their specific MCU.
+ * This driver uses a handle-based HAL pattern: platform-level I/O routines
+ * are stored as function pointers in an MPU6500_handle struct provided by
+ * the user.  Multiple MPU6500 instances can coexist simply by using separate
+ * handles.
  *
  * The MPU-6500 also exposes AUX I2C master functions
  * (MPU6500_AUXIIC_ReadReg / MPU6500_AUXIIC_WriteReg) used to interface an
@@ -15,7 +17,6 @@
 #include "config.h"
 #include <math.h>
 #include <stdint.h>
-#include <stdio.h>
 #include "imu.h"
 #include "temp.h"
 
@@ -27,7 +28,6 @@
 #define ACCEL_G 9.81f
 
 /* ======== Register map ======== */
-
 #define MPU6500_XG_OFFS_USRH      0x13 /**< Gyro X offset, high byte */
 #define MPU6500_XG_OFFS_USRL      0x14 /**< Gyro X offset, low byte  */
 #define MPU6500_YG_OFFS_USRH      0x15 /**< Gyro Y offset, high byte */
@@ -53,7 +53,7 @@
 #define MPU6500_WHO_AM_I          0x75 /**< Who-Am-I register */
 
 /* ======== Register bit fields ======== */
-
+#define MPU6500_WHOAMI_VAL 0x70
 /** @brief PWR_MGMT_1: device reset */
 #define MPU6500_DEVICE_RESET  0x80
 /** @brief SIGNAL_PATH_RESET: reset gyro, accel, and temp */
@@ -94,53 +94,108 @@
 /** @brief I2C_STATUS: slave transaction complete */
 #define MPU6500_SLV_DONE      0x40
 
+/* ======== Handle types ======== */
+
+/** @brief DMA transaction state used by the driver internally */
 typedef enum {
-    MPU6500_BUSY = 0,
-    MPU6500_IDLE = 1
+    MPU6500_BUSY = 0, /**< A DMA transfer is currently in progress */
+    MPU6500_IDLE = 1  /**< No DMA transfer outstanding */
 } MPU6500_DMA_state;
 
+/**
+ * @brief Per-instance hardware abstraction handle
+ *
+ * Users allocate one handle per MPU6500 sensor, fill in the function
+ * pointers matching their MCU platform, and pass the handle to every
+ * API call.  The DMA buffers are 15 bytes:
+ *  - tx_buffer[0] = register address (sent during DMA address phase)
+ *  - rx_buffer[0] = dummy byte   (received during address phase)
+ *  - rx_buffer[1..14] = 14 bytes of sensor data
+ */
 typedef struct {
-    MPU6500_DMA_state dma_state;
-    uint8_t dma_tx_buffer[15];
-    uint8_t dma_rx_buffer[15];
-    void (*mpu6500_delay_ms)(uint32_t ms);
-    uint32_t (*mpu6500_get_stamp_ms)(void);
-    void (*mpu6500_enact)(void);
-    void (*mpu6500_deact)(void);
-    uint8_t (*mpu6500_read_reg)(uint8_t reg);
-    void (*mpu6500_write_reg)(uint8_t reg, uint8_t data);
-    void (*mpu6500_read_regs)(uint8_t start_reg, uint8_t *buffer, uint8_t length);
-    void (*mpu6500_read_regs_dma)(uint8_t start_reg,uint8_t *tx_buffer, uint8_t *rx_buffer, uint8_t length);
+    volatile MPU6500_DMA_state dma_state;         /**< Guard to prevent overlapping DMA requests */
+    uint8_t dma_tx_buffer[15];                    /**< Scratch buffer for DMA TX (1 addr + 14 data) */
+    uint8_t dma_rx_buffer[15];                    /**< Scratch buffer for DMA RX (1 dummy + 14 data) */
+    void (*mpu6500_delay_ms)(uint32_t ms);        /**< Blocking millisecond delay */
+    uint32_t (*mpu6500_get_stamp_ms)(void);       /**< Free-running millisecond counter */
+    void (*mpu6500_enact)(void);                  /**< Power-on / enable the device */
+    void (*mpu6500_deact)(void);                  /**< Power-off / disable the device */
+    uint8_t (*mpu6500_read_reg)(uint8_t reg);     /**< Single register read (I2C / SPI) */
+    void (*mpu6500_write_reg)(uint8_t reg, uint8_t data);  /**< Single register write */
+    void (*mpu6500_read_regs)(uint8_t start_reg, uint8_t *buffer, uint8_t length);        /**< Burst register read (blocking) */
+    void (*mpu6500_read_regs_dma)(uint8_t start_reg, uint8_t *tx_buffer, uint8_t *rx_buffer, uint8_t length); /**< Burst register read (DMA, non-blocking) */
 } MPU6500_handle;
 
 /* ======== Public API ======== */
 
 /**
- * @brief  Initialize the MPU6500, configure filters and ranges
- * @return 0 on success, non-zero on failure (e.g. Who-Am-I mismatch)
+ * @brief  Initialise the MPU6500: validates Who-Am-I, resets the signal
+ *         path, configures DLPF (~5 Hz), full-scale ranges, sample-rate
+ *         divider, and enables the data-ready interrupt.
+ * @param  handle  Initialised handle with all function pointers set
+ * @return 0 on success, 1 on Who-Am-I mismatch
  */
 uint8_t MPU6500_Init(MPU6500_handle *handle);
 
 /**
- * @brief Read IMU data (accel, gyro, temperature) and populate a handle
- * @param handle Pointer to the handle to fill
- * @param imu Pointer to the Imu structure to populate
- * @param temp Pointer to the Temperature_Celsius structure to populate
+ * @brief Read the latest IMU + temperature sample (blocking I2C / SPI)
+ * @param handle  Initialised handle
+ * @param imu     Output: populated Imu (accel m/s^2, gyro deg/s, timestamp_ms)
+ * @param temp    Output: populated Temperature_Celsius (timestamp_ms, degC)
  */
 void MPU6500_ReadData(MPU6500_handle *handle, Imu *imu, Temperature_Celsius *temp);
 
+/**
+ * @brief Start a non-blocking DMA read of the latest sample
+ *
+ * Timestamps are written immediately; the actual data extraction happens
+ * in the completion callback MPU6500_On_ReadData_DMA_Cplt, which the user
+ * must call from their DMA-transfer-complete ISR.
+ *
+ * @param handle  Initialised handle
+ * @param imu     Output: timestamp_ms is written now; accel/gyro later
+ * @param temp    Output: timestamp_ms is written now; data later
+ */
 void MPU6500_ReadData_DMA(MPU6500_handle *handle, Imu *imu, Temperature_Celsius *temp);
 
+/**
+ * @brief DMA-transfer-complete handler — call from ISR
+ *
+ * Parses the DMA rx buffer (14 bytes: accel 6 + temp 2 + gyro 6),
+ * scales raw values to physical units, and marks DMA state back to IDLE
+ * so the next MPU6500_ReadData_DMA can proceed.
+ *
+ * @param handle  Initialised handle (must be in MPU6500_BUSY state)
+ * @param imu     Output: acceleration & angular_velocity populated here
+ * @param temp    Output: temperature data populated here
+ */
 void MPU6500_On_ReadData_DMA_Cplt(MPU6500_handle *handle, Imu *imu, Temperature_Celsius *temp);
 
 /**
- * @brief Set gyroscope offset calibration values
+ * @brief Set gyroscope offset calibration values (applied in hardware)
+ * @param handle   Initialised handle
  * @param offset_x X-axis offset (deg/s)
  * @param offset_y Y-axis offset (deg/s)
  * @param offset_z Z-axis offset (deg/s)
  */
 void MPU6500_Set_Gyro_Offset(MPU6500_handle *handle, float offset_x, float offset_y, float offset_z);
 
-uint8_t MPU6500_AUXIIC_ReadReg(MPU6500_handle *handle, uint8_t addr, uint8_t reg);
+/**
+ * @brief Read from an external sensor via the MPU6500 AUX I2C bus
+ * @param handle      Initialised handle
+ * @param addr        7-bit I2C address of the external sensor
+ * @param reg         Register to read from the external sensor
+ * @param timeout_ms  Maximum wait time in milliseconds
+ * @return Register value, or best-effort read on timeout
+ */
+uint8_t MPU6500_AUXIIC_ReadReg(MPU6500_handle *handle, uint8_t addr, uint8_t reg, uint32_t timeout_ms);
 
-void MPU6500_AUXIIC_WriteReg(MPU6500_handle *handle, uint8_t addr, uint8_t reg, uint8_t data);
+/**
+ * @brief Write to an external sensor via the MPU6500 AUX I2C bus
+ * @param handle      Initialised handle
+ * @param addr        7-bit I2C address of the external sensor
+ * @param reg         Register to write
+ * @param data        Value to write
+ * @param timeout_ms  Maximum wait time in milliseconds
+ */
+void MPU6500_AUXIIC_WriteReg(MPU6500_handle *handle, uint8_t addr, uint8_t reg, uint8_t data, uint32_t timeout_ms);

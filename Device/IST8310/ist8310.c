@@ -1,13 +1,15 @@
 /**
  * @file ist8310.c
- * @brief ISENTEK IST8310 3-axis magnetometer driver implementation
+ * @brief ISENTEK IST8310 3-axis magnetometer driver — handle-based implementation
  */
 
 #include "ist8310.h"
 
 /**
- * @brief  Initialize the IST8310 sensor
- * @return 0 on success, 1 if Who-Am-I check fails
+ * @brief  Initialise the IST8310: validates Who-Am-I and configures
+ *         measurement mode (200 Hz continuous, 4× averaging)
+ * @param  handle  Initialised handle with all function pointers set
+ * @return 0 on success, 1 on Who-Am-I mismatch
  */
 uint8_t IST8310_Init(IST8310_handle *handle) {
     handle->ist8310_usr_cfg();
@@ -24,9 +26,9 @@ uint8_t IST8310_Init(IST8310_handle *handle) {
 }
 
 /**
- * @brief Read magnetometer data and populate a handle
- * @param handle Pointer to the handle to fill
- * @param mag Pointer to the magnetic field structure to populate
+ * @brief Read the latest magnetometer sample (blocking I2C / SPI)
+ * @param handle  Initialised handle
+ * @param mag     Output: populated MagneticField (µT, timestamp_ms)
  */
 void IST8310_ReadData(IST8310_handle *handle, MagneticField *mag) {
     uint8_t buffer[6];
@@ -37,20 +39,37 @@ void IST8310_ReadData(IST8310_handle *handle, MagneticField *mag) {
     mag->data.z = ((int16_t)(buffer[5] << 8 | buffer[4])) * IST8310_SCALE;
 }
 
+/**
+ * @brief Start a non-blocking DMA read of the latest sample
+ *
+ * Timestamp is written immediately; actual data extraction happens in
+ * IST8310_On_ReadData_DMA_Cplt (called from DMA ISR).
+ *
+ * @param handle  Initialised handle
+ * @param mag     Output: timestamp_ms is written now; x/y/z later
+ */
 void IST8310_ReadData_DMA(IST8310_handle *handle, MagneticField *mag) {
     if (handle->dma_state == IST8310_BUSY) {
-        // DMA transfer is already in progress, return early
         return;
     }
     mag->timestamp_ms = handle->ist8310_get_stamp_ms();
 
-    handle->ist8310_readregs_dma(IST8310_DATA_XL, handle->dma_tx_buffer, handle->dma_rx_buffer, 6);
+    handle->ist8310_read_regs_dma(IST8310_DATA_XL, handle->dma_tx_buffer, handle->dma_rx_buffer, 6);
     handle->dma_state = IST8310_BUSY;
 }
 
+/**
+ * @brief DMA-transfer-complete handler — call from ISR
+ *
+ * Parses the DMA rx buffer (rx[1..6] are the 6 sensor-data bytes;
+ * rx[0] is a dummy byte from the address phase), scales raw values
+ * to µT, and marks DMA state back to IDLE.
+ *
+ * @param handle  Initialised handle (must be in IST8310_BUSY state)
+ * @param mag     Output: x/y/z are populated here
+ */
 void IST8310_On_ReadData_DMA_Cplt(IST8310_handle *handle, MagneticField *mag) {
     if (handle->dma_state != IST8310_BUSY) {
-        // DMA transfer is not in progress, return early
         return;
     }
 

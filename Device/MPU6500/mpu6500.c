@@ -1,17 +1,20 @@
 /**
  * @file mpu6500.c
- * @brief InvenSense MPU-6500 6-axis IMU driver implementation
+ * @brief InvenSense MPU-6500 6-axis IMU driver — handle-based implementation
  */
 
 #include "mpu6500.h"
 
 /**
- * @brief  Initialize the MPU6500, configure filters and ranges
- * @return 0 on success, 1 if Who-Am-I check fails
+ * @brief  Initialise the MPU6500: validates Who-Am-I, resets the signal
+ *         path, configures DLPF (~5 Hz), full-scale ranges, sample-rate
+ *         divider, and enables the data-ready interrupt.
+ * @param  handle  Initialised handle with all function pointers set
+ * @return 0 on success, 1 on Who-Am-I mismatch
  */
 uint8_t MPU6500_Init(MPU6500_handle *handle) {
 
-    if (handle->mpu6500_read_reg(MPU6500_WHO_AM_I) != 0x70) {
+    if (handle->mpu6500_read_reg(MPU6500_WHO_AM_I) != MPU6500_WHOAMI_VAL) {
         return 1;
     }
 
@@ -71,11 +74,14 @@ uint8_t MPU6500_Init(MPU6500_handle *handle) {
 }
 
 /**
- * @brief Read IMU data (accel, gyro, temperature) and populate a handle
- * @param handle Pointer to the handle to fill
+ * @brief Read the latest IMU + temperature sample (blocking I2C / SPI)
+ * @param handle  Initialised handle
+ * @param imu     Output: populated Imu (accel m/s^2, gyro deg/s, timestamp_ms)
+ * @param temp    Output: populated Temperature_Celsius (timestamp_ms, degC)
  */
 void MPU6500_ReadData(MPU6500_handle *handle, Imu *imu, Temperature_Celsius *temp) {
     imu->timestamp_ms = handle->mpu6500_get_stamp_ms();
+    temp->timestamp_ms = imu->timestamp_ms;
 
     uint8_t buf[14];
     handle->mpu6500_read_regs(MPU6500_ACCEL_XOUT_H, buf, 14);
@@ -89,9 +95,18 @@ void MPU6500_ReadData(MPU6500_handle *handle, Imu *imu, Temperature_Celsius *tem
     imu->angular_velocity.z     = (int16_t)((buf[12] << 8) | buf[13]) * GYRO_SCALE;
 }
 
+/**
+ * @brief Start a non-blocking DMA read of the latest sample
+ *
+ * Timestamps are written immediately; actual data extraction happens in
+ * MPU6500_On_ReadData_DMA_Cplt (called from DMA ISR).
+ *
+ * @param handle  Initialised handle
+ * @param imu     Output: timestamp_ms is written now; accel/gyro later
+ * @param temp    Output: timestamp_ms is written now; data later
+ */
 void MPU6500_ReadData_DMA(MPU6500_handle *handle, Imu *imu, Temperature_Celsius *temp) {
     if (handle->dma_state == MPU6500_BUSY) {
-        // DMA transfer is already in progress, return early
         return;
     }
     imu->timestamp_ms = handle->mpu6500_get_stamp_ms();
@@ -101,9 +116,19 @@ void MPU6500_ReadData_DMA(MPU6500_handle *handle, Imu *imu, Temperature_Celsius 
     handle->dma_state = MPU6500_BUSY;
 }
 
+/**
+ * @brief DMA-transfer-complete handler — call from ISR
+ *
+ * Parses the DMA rx buffer (rx[1..14] are the 14 sensor-data bytes;
+ * rx[0] is a dummy byte from the address phase), scales raw values
+ * to physical units, and marks DMA state back to IDLE.
+ *
+ * @param handle  Initialised handle (must be in MPU6500_BUSY state)
+ * @param imu     Output: acceleration & angular_velocity populated here
+ * @param temp    Output: temperature data populated here
+ */
 void MPU6500_On_ReadData_DMA_Cplt(MPU6500_handle *handle, Imu *imu, Temperature_Celsius *temp) {
     if (handle->dma_state != MPU6500_BUSY) {
-        // DMA transfer is not in progress, return early
         return;
     }
     handle->mpu6500_deact();
@@ -120,7 +145,8 @@ void MPU6500_On_ReadData_DMA_Cplt(MPU6500_handle *handle, Imu *imu, Temperature_
 }
 
 /**
- * @brief Set gyroscope offset calibration values
+ * @brief Set gyroscope offset calibration values (applied in hardware)
+ * @param handle   Initialised handle
  * @param offset_x X-axis offset (deg/s)
  * @param offset_y Y-axis offset (deg/s)
  * @param offset_z Z-axis offset (deg/s)
@@ -144,30 +170,36 @@ void MPU6500_Set_Gyro_Offset(MPU6500_handle *handle, float offset_x, float offse
 
 /**
  * @brief Read from an external sensor via the MPU6500 AUX I2C bus
- * @param addr 7-bit I2C address of the external sensor
- * @param reg  Register to read from the external sensor
- * @return Register value, or 0 on failure
+ * @param handle      Initialised handle
+ * @param addr        7-bit I2C address of the external sensor
+ * @param reg         Register to read from the external sensor
+ * @param timeout_ms  Maximum wait time in milliseconds
+ * @return Register value, or best-effort read on timeout
  */
-uint8_t MPU6500_AUXIIC_ReadReg(MPU6500_handle *handle, uint8_t addr, uint8_t reg) {
+uint8_t MPU6500_AUXIIC_ReadReg(MPU6500_handle *handle, uint8_t addr, uint8_t reg, uint32_t timeout_ms) {
     handle->mpu6500_write_reg(MPU6500_I2C_SLV4_ADDR, addr | MPU6500_SLV_RNW);
     handle->mpu6500_write_reg(MPU6500_I2C_SLV4_REG, reg);
     handle->mpu6500_write_reg(MPU6500_I2C_SLV4_CTRL, MPU6500_SLV_EN);
-    while (!(handle->mpu6500_read_reg(MPU6500_I2C_STATUS) & MPU6500_SLV_DONE)) {
+    uint32_t now = handle->mpu6500_get_stamp_ms();
+    while (!(handle->mpu6500_read_reg(MPU6500_I2C_STATUS) & MPU6500_SLV_DONE) && (handle->mpu6500_get_stamp_ms() - now < timeout_ms)) {
     }
     return handle->mpu6500_read_reg(MPU6500_I2C_SLV4_DI);
 }
 
 /**
  * @brief Write to an external sensor via the MPU6500 AUX I2C bus
- * @param addr 7-bit I2C address of the external sensor
- * @param reg  Register to write
- * @param data Value to write
+ * @param handle      Initialised handle
+ * @param addr        7-bit I2C address of the external sensor
+ * @param reg         Register to write
+ * @param data        Value to write
+ * @param timeout_ms  Maximum wait time in milliseconds
  */
-void MPU6500_AUXIIC_WriteReg(MPU6500_handle *handle, uint8_t addr, uint8_t reg, uint8_t data) {
+void MPU6500_AUXIIC_WriteReg(MPU6500_handle *handle, uint8_t addr, uint8_t reg, uint8_t data, uint32_t timeout_ms) {
     handle->mpu6500_write_reg(MPU6500_I2C_SLV4_ADDR, addr);
     handle->mpu6500_write_reg(MPU6500_I2C_SLV4_REG, reg);
     handle->mpu6500_write_reg(MPU6500_I2C_SLV4_DO, data);
     handle->mpu6500_write_reg(MPU6500_I2C_SLV4_CTRL, MPU6500_SLV_EN);
-    while (!(handle->mpu6500_read_reg(MPU6500_I2C_STATUS) & MPU6500_SLV_DONE)) {
+    uint32_t now = handle->mpu6500_get_stamp_ms();
+    while (!(handle->mpu6500_read_reg(MPU6500_I2C_STATUS) & MPU6500_SLV_DONE) && (handle->mpu6500_get_stamp_ms() - now < timeout_ms)) {
     }
 }
